@@ -3,7 +3,6 @@ local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local trashCanFolder = workspace.Map.Trash
 local camera = workspace.CurrentCamera
 
 local localPlayer = Players.LocalPlayer
@@ -60,12 +59,16 @@ local function fixes()
 			_G.targetActivated = false
 			_G.targetSafeActivated = true
 			_G.targetAutoAfk = false
-			_G.targetPredict = false
 			_G.targetNeedTp = false
 			_G.targetTarget = nil
 			_G.targetQuotes = 1 -- 1 is basic target, 2 is smart target (tp only if has skills)
 			_G.targetSafeProp = 30
 			_G.targetSafeQuotes = 2 -- 1 is basic (15hp prop void); 2 is absolute safe (15hp prop void * CFrame.Angles(-89.5, 0,0)
+			_G.targetPredict = false -- 💀💀💀
+			_G.targetPredictDistance = -5 -- idk whats it
+			_G.targetPredictSpeed = 0 -- idk whats it
+			_G.targetAutoCalculatePredictFactor = true -- use formula (callback in ds)
+			_G.targetPredictFactor = 0.25 -- default lmao 💀💀💀
 
 			_G.autoGetIceBoss = false
 
@@ -97,7 +100,7 @@ local function fixes()
 			_G.absoluteImmortalCopy = nil
 			_G.absoluteImmortalNeedTP = true
 			_G.absoluteImmortalReactionTime = 1 -- 0.1 for good fps
-			_G.absoluteImmortalTPQuotes = 0 -- 0 is default (CFrame.new(100000000, 100000000, 100000000)), 2 is custom
+			_G.absoluteImmortalTPQuotes = 1 -- 1 is default (CFrame.new(100000000, 100000000, 100000000)), 2 is custom
 			_G.absoluteImmortalCustomTP = CFrame.new(0,0,0) -- custom tp cframe
 			_G.absoluteImmortalCopySpeedMultipler = 15 -- 1 is default
 			_G.absoluteImmortalAntiVelocity = true -- anti fling after tp to copy
@@ -477,7 +480,7 @@ local function setupUI()
 				_G.adcActivated = Value
 			end,
 		})
-		
+
 		local antiDeathCounterAntiFlingToggle = Tab4:CreateToggle({
 			Name = "Anti Fling Toggle (Anti Death Counter)",
 			CurrentValue = _G.adcActivated,
@@ -676,7 +679,7 @@ local function setupUI()
 				if option and option ~= nil then
 					if string.match(option, "Basic") then
 						print("Basic")
-						_G.absoluteImmortalTPQuotes = 0
+						_G.absoluteImmortalTPQuotes = 1
 					end
 				else
 					warn(option)
@@ -720,17 +723,6 @@ local function setupUI()
 				end
 			end,
 		})
-
-		local targetPredictToggle = Tab4:CreateToggle({
-			Name = "Target Predict Toggle",
-			CurrentValue = _G.targetActivated,
-			Flag = "targetPredictToggle", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
-			Callback = function(Value)
-				print(Value)
-				_G.targetPredict = Value
-			end,
-		})
-
 		local targetQuotesDropdown = Tab4:CreateDropdown({
 			Name = "Target Mode Quotes",
 			Options = {"Basic (auto tp to Player)", "Smart (tp if u has a 1/2/3/4 skill)"},
@@ -806,6 +798,66 @@ local function setupUI()
 				else
 					warn(option)
 				end
+			end,
+		})
+
+		local targetPredictToggle = Tab4:CreateToggle({
+			Name = "Target Predict Toggle",
+			CurrentValue = _G.targetPredict,
+			Flag = "targetPredictToggle", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+			Callback = function(Value)
+				print(Value)
+				_G.targetPredict = Value
+			end,
+		})
+
+		local targetAutoPredictFactorToggle = Tab4:CreateToggle({
+			Name = "Target Auto Set Predict Factor",
+			CurrentValue = _G.targetAutoCalculatePredictFactor,
+			Flag = "targetAutoCalculatePredictFactor", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+			Callback = function(Value)
+				print(Value)
+				_G.targetAutoCalculatePredictFactor = Value
+			end,
+		})
+
+		local targetPredictFactorSlider = Tab4:CreateSlider({
+			Name = "Target Predict Factor",
+			Range = {-5, 5},
+			Increment = 0.01,
+			Suffix = "Value",
+			CurrentValue = _G.targetPredictFactor,
+			Flag = "targetPredictFactor", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+			Callback = function(Value)
+				print(Value)
+				_G.targetPredictFactor = Value
+			end,
+		})
+		_G.targetPredictFactorSlider = targetPredictFactorSlider
+
+		local targetPredictDistanceSlider = Tab4:CreateSlider({
+			Name = "Target Predict Distance",
+			Range = {-10, 100},
+			Increment = 1,
+			Suffix = "Studs",
+			CurrentValue = _G.targetPredictDistance,
+			Flag = "targetPredictDistance", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+			Callback = function(Value)
+				print(Value)
+				_G.targetPredictDistance = Value
+			end,
+		})
+
+		local targetPredictSpeedSlider = Tab4:CreateSlider({
+			Name = "Target Predict Speed",
+			Range = {1, 1000},
+			Increment = 1,
+			Suffix = "Studs",
+			CurrentValue = _G.targetPredictSpeed,
+			Flag = "targetPredictSpeed", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+			Callback = function(Value)
+				print(Value)
+				_G.targetPredictSpeed = Value
 			end,
 		})
 
@@ -2362,27 +2414,31 @@ local function absoluteImmortalFUNC(slate)
 										v.RotVelocity = Vector3.new(0, 0, 0)
 									end
 								end
+
+								localPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+								localPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+								localPlayer.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+								localPlayer.Character.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
 							end)
 							task.defer(function()
-								for i, v in pairs(_G.absoluteImmortalCopy:GetDescendants()) do
-									if v:IsA("BasePart") then
-										v.Velocity = Vector3.new(0,0,0)
-										v.AssemblyLinearVelocity = Vector3.new(0,0,0)
-										v.AssemblyAngularVelocity = Vector3.new(0,0,0)
-										v.RotVelocity = Vector3.new(0, 0, 0)
+								if _G.absoluteImmortalCopy ~= nil then
+									for i, v in pairs(_G.absoluteImmortalCopy:GetDescendants()) do
+										if v:IsA("BasePart") then
+											v.Velocity = Vector3.new(0,0,0)
+											v.AssemblyLinearVelocity = Vector3.new(0,0,0)
+											v.AssemblyAngularVelocity = Vector3.new(0,0,0)
+											v.RotVelocity = Vector3.new(0, 0, 0)
+										end
 									end
+
+									_G.absoluteImmortalCopy.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+									_G.absoluteImmortalCopy.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+									_G.absoluteImmortalCopy.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+									_G.absoluteImmortalCopy.HumanoidRootPart.RotVelocity = Vector3.new(0, 0, 0)
+								else
+									warn("_G.absoluteImmortalCopy == nil")
 								end
 							end)
-
-							localPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-							localPlayer.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-							localPlayer.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-							localPlayer.Character.RotVelocity = Vector3.new(0, 0, 0)
-
-							_G.absoluteImmortalCopy.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
-							_G.absoluteImmortalCopy.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-							_G.absoluteImmortalCopy.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-							_G.absoluteImmortalCopy.RotVelocity = Vector3.new(0, 0, 0)
 						end
 					end)
 
@@ -2437,11 +2493,12 @@ end
 
 function trashGrabberFUNC()
 	if not localPlayer.Character then return end
+	if not workspace.Map:FindFirstChild("Trash") then return end
 	if _G.trashGrabberWorking == true then return end
 	_G.trashGrabberWorking = true
 
+	local trashCanFolder = workspace.Map.Trash
 	local nearestTrashCan 
-
 	if _G.trashGrabberSearchMode == 1 then
 		local nearestDistance = math.huge
 
@@ -2507,7 +2564,7 @@ function trashGrabberFUNC()
 			distance = math.floor(distance)
 
 			if root.Transparency ~= 1 and root.CanCollide ~= false then
-				if (can and can == true) and distance < nearestDistance then
+				if (can and can == true) and distance > nearestDistance then
 					nearestTrashCan = v
 					nearestDistance = distance
 				else
@@ -2525,7 +2582,7 @@ function trashGrabberFUNC()
 	end
 
 	if not nearestTrashCan then warn("nearest trash can not found"); _G.trashGrabberWorking = false return end
-
+	print(nearestTrashCan)
 
 	local oldCFrame = localPlayer.Character.HumanoidRootPart.CFrame
 
@@ -2545,14 +2602,14 @@ function trashGrabberFUNC()
 		repeat
 			task.wait(_G.trashGrabberReactionTime or 0.05)
 			_G.absoluteImmortal = true
-			_G.absoluteImmortalTPQuotes = 1
+			_G.absoluteImmortalTPQuotes = 2
 			_G.absoluteImmortalCustomTP = cf
 			_G.absoluteImmortalSmartMode = false
 			absoluteImmortalFUNC()
 		until localPlayer.Character:GetAttribute("HasTrashcan") and (localPlayer.Character:GetAttribute("HasTrashcan") ~= false and localPlayer.Character:GetAttribute("HasTrashcan") ~= nil)
 
 		_G.absoluteImmortal = false
-		_G.absoluteImmortalTPQuotes = 0
+		_G.absoluteImmortalTPQuotes = 1
 		_G.absoluteImmortalCustomTP = CFrame.new(0,0,0)
 		_G.absoluteImmortalSmartMode = false
 		absoluteImmortalFUNC()
@@ -2564,6 +2621,39 @@ function trashGrabberFUNC()
 
 	_G.trashGrabberWorking = false
 end
+
+
+
+local function calculateFactor(number)
+	if not number then return end
+	return tonumber(tostring("0." .. (number*2.5)))
+end
+
+local function predictPosition(delta, slate)
+	if slate == 1 then
+		local angle = 0
+		local cf = _G.targetTarget.Character.HumanoidRootPart.CFrame
+		local pos = cf.Position
+		local vel = _G.targetTarget.Character.HumanoidRootPart.Velocity
+
+		local predicted_pos = pos + vel * (_G.targetPredictFactor or 0.250)
+		angle = angle + _G.targetPredictSpeed * delta
+
+		local tarPos = Vector3.new(predicted_pos.X + (math.cos(angle) * (_G.targetPredictDistance or 3)), predicted_pos.Y - 3, predicted_pos.Z + (math.sin(angle) * (_G.targetPredictDistance or 3)))
+		local tarPos2 = tarPos + Vector3.new(0,1,0)
+		return CFrame.new(tarPos, tarPos2)
+	elseif slate == 2 then
+		local cf = _G.targetTarget.Character.HumanoidRootPart.CFrame
+		local pos = cf.Position
+		local vel = _G.targetTarget.Character.HumanoidRootPart.Velocity
+
+		local predicted_pos = pos + vel * .25
+		return CFrame.new(predicted_pos, predicted_pos+Vector3.new(0,1,0))
+	end
+
+	return nil;
+end
+
 
 
 RunService.Heartbeat:Connect(function(delta)
@@ -2615,8 +2705,23 @@ RunService.Heartbeat:Connect(function(delta)
 					if _G.targetSafeActivated == true then
 						if localPlayer.Character.Humanoid.Health > _G.targetSafeProp then
 							if _G.targetPredict == true then
+								if _G.targetAutoCalculatePredictFactor == true then
+									_G.targetPredictFactor = calculateFactor((localPlayer:GetNetworkPing() or 100));
+									_G.targetPredictFactorSlider:Set(_G.targetPredictFactor)
+								end
+
+								local angle = 0
 								local cf = _G.targetTarget.Character.HumanoidRootPart.CFrame
-								localPlayer.Character.HumanoidRootPart.CFrame = (_G.targetTarget.Character.Humanoid.MoveDirection * delta * (_G.targetTarget.Character.Humanoid.WalkSpeed / 5 or 1))
+								local pos = cf.Position
+								local vel = _G.targetTarget.Character.HumanoidRootPart.Velocity
+
+								local predicted_pos = pos + vel * (_G.targetPredictFactor or 0.25)
+								angle = angle + _G.targetPredictSpeed * delta
+
+								local tarPos = Vector3.new(predicted_pos.X + (math.cos(angle) * (_G.targetPredictDistance or 3)), predicted_pos.Y - 3, predicted_pos.Z + (math.sin(angle) * (_G.targetPredictDistance or 3)))
+								local tarPos2 = tarPos + Vector3.new(0,1,0)
+
+								localPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(tarPos, tarPos2) or (cf - (cf.LookVector * 3.5) + _G.targetTarget.Character.Humanoid.MoveDirection)
 							else
 								local cf = _G.targetTarget.Character.HumanoidRootPart.CFrame
 								localPlayer.Character.HumanoidRootPart.CFrame = cf - (cf.LookVector * 3.5) + _G.targetTarget.Character.Humanoid.MoveDirection
@@ -2642,15 +2747,14 @@ RunService.Heartbeat:Connect(function(delta)
 					if _G.absoluteImmortalNeedTP then
 						if localPlayer.Character:FindFirstChild("HumanoidRootPart") then
 							local tpCFrame
-							if _G.absoluteImmortalTPQuotes == 0 then
+							if _G.absoluteImmortalTPQuotes == 1 then
 								tpCFrame = CFrame.new(math.random(90000000, 100000000),math.random(90000000, 100000000),math.random(90000000, 100000000))
-							elseif _G.absoluteImmortalTPQuotes == 1 then
-								local tpCFrame1 = CFrame.new(math.random(90000000, 100000000),math.random(90000000, 100000000),math.random(90000000, 100000000))
-								tpCFrame = (_G.absoluteImmortalCustomTP or tpCFrame1)
+							elseif _G.absoluteImmortalTPQuotes == 2 then
+								tpCFrame = _G.absoluteImmortalCustomTP
 							else
 								warn(_G.absoluteImmortalTPQuotes)
 							end
-							localPlayer.Character.HumanoidRootPart.CFrame = tpCFrame or _G.absoluteImmortalCopy.HumanoidRootPart.CFrame
+							localPlayer.Character.HumanoidRootPart.CFrame = tpCFrame -- or _G.absoluteImmortalCopy.HumanoidRootPart.CFrame
 
 							if _G.absoluteImmortalAntiVelocity == true then
 								task.defer(function()
