@@ -9,7 +9,7 @@ local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer.PlayerGui
 local mouse = localPlayer:GetMouse()
 
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/zedikik/RayField/refs/heads/main/RayField.lua'))() -- https://sirius.menu/rayfield
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 if not Rayfield then warn("Rayfield started not correcly, try to reexecute script") return end
 Rayfield:Notify({
 	Title = "Tsb Script",
